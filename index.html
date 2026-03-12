@@ -672,9 +672,12 @@ select.f-inp { cursor:pointer; font-family:'Sora',sans-serif; font-size:13px; }
               <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1B50A8;font-weight:700">API Key 발급 →</a>
             </div>
             <div class="f-grp">
-              <div class="f-lbl">Gemini API Key</div>
+              <div class="f-lbl" style="display:flex;justify-content:space-between;align-items:center">
+                <span>Gemini API Key</span>
+                <span id="keyStatus" style="color:var(--green);font-size:9px;font-weight:700;letter-spacing:0"></span>
+              </div>
               <div class="key-wrap">
-                <input type="password" class="f-inp" id="geminiKey" placeholder="AIza...">
+                <input type="password" class="f-inp" id="geminiKey" placeholder="AIza..." oninput="checkKeyStatus()">
                 <button class="eye-btn" onclick="toggleVis('geminiKey')">👁</button>
               </div>
             </div>
@@ -885,6 +888,20 @@ function toggleVis(id) {
   el.type = el.type==='password' ? 'text' : 'password';
 }
 
+function checkKeyStatus() {
+  const val = document.getElementById('geminiKey').value.trim();
+  const el = document.getElementById('keyStatus');
+  if (!el) return;
+  if (val.length > 10) {
+    el.textContent = '✓ 입력됨 (미저장)';
+    el.style.color = 'var(--amber)';
+  } else {
+    const saved = localStorage.getItem('stockai_gemini_key');
+    el.textContent = saved ? '✓ 저장됨' : '';
+    el.style.color = 'var(--green)';
+  }
+}
+
 function setMode(mode, el) {
   virtMode = mode === 'virtual';
   document.getElementById('modeVirt').classList.toggle('on', virtMode);
@@ -906,9 +923,10 @@ function saveSettings() {
       budget: S.budget, rebalTime: S.rebalTime,
       backendUrl: S.backendUrl, virtual: S.virtual
     }));
-    // Gemini 키는 sessionStorage에만 (탭 닫으면 삭제, 새로고침엔 유지)
+    // Gemini 키: localStorage에 저장 (PWA 앱 껐다 켜도 유지)
+    // 이 앱은 외부 서버로 키를 전송하지 않으며, 본인 기기 내부에만 저장됩니다.
     const gKey = document.getElementById('geminiKey').value.trim();
-    if (gKey) sessionStorage.setItem('stockai_gemini_key', gKey);
+    if (gKey) localStorage.setItem('stockai_gemini_key', gKey);
   } catch(e){}
 
   const fb = document.getElementById('saveFeedback');
@@ -925,11 +943,19 @@ function loadSettings() {
     if (saved.backendUrl){ document.getElementById('backendUrl').value = saved.backendUrl; S.backendUrl = saved.backendUrl; }
     if (saved.virtual !== undefined) { virtMode = saved.virtual; setMode(virtMode?'virtual':'real', null); }
 
-    // Gemini 키 복원 (sessionStorage — 새로고침엔 유지, 탭 닫으면 삭제)
-    const gKey = sessionStorage.getItem('stockai_gemini_key');
+    // Gemini 키 복원 (localStorage — 앱 껐다 켜도 유지)
+    const gKey = localStorage.getItem('stockai_gemini_key');
     if (gKey) document.getElementById('geminiKey').value = gKey;
 
     document.getElementById('botTimeDisplay').textContent = S.rebalTime + ' KST';
+
+    // 키 저장 상태 표시 업데이트
+    const savedKey = localStorage.getItem('stockai_gemini_key');
+    const keyStatusEl = document.getElementById('keyStatus');
+    if (keyStatusEl && savedKey) {
+      keyStatusEl.textContent = '✓ 저장됨';
+      keyStatusEl.style.color = 'var(--green)';
+    }
   } catch(e){}
 }
 
@@ -1084,22 +1110,24 @@ async function runSimRebalance() {
   document.getElementById('reasonBox').innerHTML =
     '<span class="r-tag">분석중</span><div class="dots"><span></span><span></span><span></span></div>';
 
-  // geminiKey: input 값 우선, 없으면 sessionStorage에서 가져오기
+  // geminiKey: input 값 우선, 없으면 localStorage에서 가져오기 (앱 재시작 후에도 동작)
   const key = document.getElementById('geminiKey').value.trim()
-    || sessionStorage.getItem('stockai_gemini_key')
+    || localStorage.getItem('stockai_gemini_key')
     || '';
   let advice = null;
 
   if (key) {
     try {
-      const prompt = `당신은 미국 주식 포트폴리오 매니저입니다. 오늘의 포트폴리오를 JSON만 반환하세요 (마크다운 없이).
+      // responseMimeType json 모드: Gemini가 순수 JSON만 반환, thinking 블록 섞임 없음
+      const prompt = `You are a US stock portfolio manager. Return ONLY valid JSON, no explanation.
 
-예산: $${SIM.cash.toFixed(2)}
-현재 보유: ${JSON.stringify(Object.keys(SIM.holdings))}
+Budget: $\${SIM.cash.toFixed(2)}
+Currently holding: \${JSON.stringify(Object.keys(SIM.holdings))}
 
-S&P500 전체 (ETF 포함)에서 자유롭게 2~5종목 선택하세요.
-각 종목의 weight 합이 정확히 1.0이 되도록 하세요.
+Pick 2-5 stocks freely from S&P500 (ETFs like SPY/QQQ allowed).
+Weights must sum to exactly 1.0. Reasons in Korean.
 
+Exact format required:
 {"picks":[{"ticker":"NVDA","weight":0.4,"reason":"이유"},{"ticker":"SPY","weight":0.6,"reason":"이유"}],"sell":[],"summary":"전략 요약 2문장"}`;
 
       const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{
@@ -1107,22 +1135,35 @@ S&P500 전체 (ETF 포함)에서 자유롭게 2~5종목 선택하세요.
         headers:{'Content-Type':'application/json','x-goog-api-key':key},
         body:JSON.stringify({
           contents:[{parts:[{text:prompt}]}],
-          generationConfig:{temperature:0.2,maxOutputTokens:1200}
+          generationConfig:{
+            temperature:0.2,
+            maxOutputTokens:1024,
+            responseMimeType:'application/json'
+          }
         })
       });
       const data = await res.json();
-      // 2.5 Flash는 thinking 모델 — parts 중 text 타입만 합치기
+
+      // API 레벨 에러 체크 (잘못된 키, 할당량 초과 등)
+      if (data.error) throw new Error('API오류('+data.error.code+'): '+data.error.message);
+
+      // thinking 모델: thought:true 블록 제외하고 실제 응답만 추출
       const parts = data.candidates?.[0]?.content?.parts || [];
-      const text = parts.filter(p=>p.text).map(p=>p.text).join('');
-      // JSON 블록만 추출 (마크다운 펜스, think 태그 제거)
-      const jsonMatch = text.replace(/```json|```/g,'')
-                            .replace(/<think>[\s\S]*?<\/think>/g,'')
-                            .trim()
-                            .match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('JSON 블록 없음: '+text.slice(0,200));
-      advice = JSON.parse(jsonMatch[0]);
+      const answerText = parts
+        .filter(p => p.thought !== true && typeof p.text === 'string')
+        .map(p => p.text).join('').trim();
+
+      if (!answerText) throw new Error('빈 응답. finishReason=' + (data.candidates?.[0]?.finishReason||'unknown'));
+
+      advice = JSON.parse(answerText);
       document.getElementById('aiEngineLbl').textContent = 'Gemini 2.5 Flash';
-    } catch(e) { console.error('Gemini err',e); }
+
+    } catch(e) {
+      console.error('[Gemini 오류]', e.message);
+      document.getElementById('reasonBox').innerHTML =
+        `<span class="r-tag">오류 상세</span>⚠️ \${e.message}<br><br>규칙 기반으로 대체합니다.`;
+      await new Promise(r=>setTimeout(r,2500));
+    }
   }
 
   // Fallback
