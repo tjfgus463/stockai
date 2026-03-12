@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Gemini API 디버그</title>
+<style>
+body { font-family: monospace; padding: 20px; background: #0B1F3A; color: #e0e0e0; }
+h2 { color: #1B6FE8; margin-bottom: 16px; }
+input { width: 100%; padding: 10px; border-radius: 8px; border: none; font-family: monospace; font-size: 13px; margin-bottom: 10px; box-sizing: border-box; }
+button { padding: 12px 24px; background: #1B6FE8; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; width: 100%; margin-bottom: 16px; }
+button:disabled { opacity: .5; }
+pre {
+  background: #162E4A; padding: 16px; border-radius: 8px;
+  white-space: pre-wrap; word-break: break-all;
+  font-size: 12px; line-height: 1.6; max-height: 600px; overflow-y: auto;
+  border-left: 3px solid #1B6FE8;
+}
+.ok  { color: #4ade80; }
+.err { color: #f87171; }
+.lbl { color: #9AA5B8; font-size: 11px; margin-bottom: 4px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h2>🔍 Gemini API 디버그</h2>
+
+<div class="lbl">Gemini API Key</div>
+<input type="password" id="apiKey" placeholder="AIza...">
+
+<div class="lbl">테스트할 모델</div>
+<input type="text" id="model" value="gemini-2.5-flash">
+
+<button onclick="runTest()" id="btn">▶ API 테스트 실행</button>
+
+<div class="lbl">응답 원문 (전체)</div>
+<pre id="out">버튼을 눌러 테스트하세요</pre>
+
+<div class="lbl">파싱 결과</div>
+<pre id="parsed">—</pre>
+
+<script>
+async function runTest() {
+  const key = document.getElementById('apiKey').value.trim()
+    || localStorage.getItem('stockai_gemini_key') || '';
+  const model = document.getElementById('model').value.trim();
+  const btn = document.getElementById('btn');
+  const out = document.getElementById('out');
+  const parsed = document.getElementById('parsed');
+
+  if (!key) { out.textContent = '❌ API Key를 입력하세요'; return; }
+
+  btn.disabled = true;
+  out.textContent = '⏳ 요청 중...';
+  parsed.textContent = '—';
+
+  const prompt = `You are a US stock portfolio manager. Return ONLY valid JSON, no explanation.
+Budget: $500
+Currently holding: []
+Pick 2-3 stocks from S&P500. Weights must sum to 1.0. Reasons in Korean.
+Exact format:
+{"picks":[{"ticker":"NVDA","weight":0.5,"reason":"이유"},{"ticker":"SPY","weight":0.5,"reason":"이유"}],"sell":[],"summary":"요약"}`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 1024,
+            responseMimeType: 'application/json'
+          }
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    // 전체 응답 출력
+    out.innerHTML = `<span class="${res.ok ? 'ok' : 'err'}">HTTP ${res.status} ${res.ok ? '✅' : '❌'}</span>\n\n` + JSON.stringify(data, null, 2);
+
+    // API 에러
+    if (data.error) {
+      parsed.innerHTML = `<span class="err">❌ API 오류: ${data.error.message}\n코드: ${data.error.code}\n상태: ${data.error.status}</span>`;
+      return;
+    }
+
+    // parts 분석
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const thoughtParts = parts.filter(p => p.thought === true);
+    const answerParts = parts.filter(p => p.thought !== true && typeof p.text === 'string');
+    const answerText = answerParts.map(p => p.text).join('').trim();
+
+    let parseResult = `parts 총 ${parts.length}개\n`;
+    parseResult += `  - thought 블록: ${thoughtParts.length}개\n`;
+    parseResult += `  - 응답 텍스트: ${answerParts.length}개\n\n`;
+    parseResult += `응답 텍스트:\n${answerText}\n\n`;
+
+    if (!answerText) {
+      parseResult += `❌ 응답 텍스트 없음\nfinishReason: ${data.candidates?.[0]?.finishReason}`;
+      parsed.innerHTML = `<span class="err">${parseResult}</span>`;
+      return;
+    }
+
+    try {
+      const json = JSON.parse(answerText);
+      parseResult += `✅ JSON 파싱 성공!\n\n` + JSON.stringify(json, null, 2);
+      parsed.innerHTML = `<span class="ok">${parseResult}</span>`;
+    } catch(e) {
+      parseResult += `❌ JSON 파싱 실패: ${e.message}\n\n원문:\n${answerText}`;
+      parsed.innerHTML = `<span class="err">${parseResult}</span>`;
+    }
+
+  } catch(e) {
+    out.innerHTML = `<span class="err">❌ 네트워크 오류: ${e.message}</span>`;
+  }
+
+  btn.disabled = false;
+}
+
+// 저장된 키 자동 로드
+window.onload = () => {
+  const saved = localStorage.getItem('stockai_gemini_key');
+  if (saved) {
+    document.getElementById('apiKey').value = saved;
+    document.getElementById('out').textContent = '저장된 키 자동 로드됨. 버튼을 눌러 테스트하세요.';
+  }
+};
+</script>
+</body>
+</html>
