@@ -543,7 +543,7 @@ select.f-inp { cursor:pointer; font-family:'Sora',sans-serif; font-size:13px; }
       <div class="card">
         <div class="c-head">
           <div class="c-ttl">📊 최근 AI 분석</div>
-          <div class="badge blue" id="aiEngineLbl">Gemini 2.0 Flash</div>
+          <div class="badge blue" id="aiEngineLbl">Gemini 2.5 Flash</div>
         </div>
         <div class="ai-body">
           <div class="sig-grid">
@@ -1102,18 +1102,26 @@ S&P500 전체 (ETF 포함)에서 자유롭게 2~5종목 선택하세요.
 
 {"picks":[{"ticker":"NVDA","weight":0.4,"reason":"이유"},{"ticker":"SPY","weight":0.6,"reason":"이유"}],"sell":[],"summary":"전략 요약 2문장"}`;
 
-      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',{
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{
         method:'POST',
         headers:{'Content-Type':'application/json','x-goog-api-key':key},
         body:JSON.stringify({
           contents:[{parts:[{text:prompt}]}],
-          generationConfig:{temperature:0.2,maxOutputTokens:600}
+          generationConfig:{temperature:0.2,maxOutputTokens:1200}
         })
       });
       const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text||'';
-      advice = JSON.parse(text.replace(/```json|```/g,'').trim());
-      document.getElementById('aiEngineLbl').textContent = 'Gemini 2.0 Flash';
+      // 2.5 Flash는 thinking 모델 — parts 중 text 타입만 합치기
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const text = parts.filter(p=>p.text).map(p=>p.text).join('');
+      // JSON 블록만 추출 (마크다운 펜스, think 태그 제거)
+      const jsonMatch = text.replace(/```json|```/g,'')
+                            .replace(/<think>[\s\S]*?<\/think>/g,'')
+                            .trim()
+                            .match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('JSON 블록 없음: '+text.slice(0,200));
+      advice = JSON.parse(jsonMatch[0]);
+      document.getElementById('aiEngineLbl').textContent = 'Gemini 2.5 Flash';
     } catch(e) { console.error('Gemini err',e); }
   }
 
