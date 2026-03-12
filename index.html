@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="StockAI">
+<meta name="theme-color" content="#0B1F3A">
+<link rel="manifest" href="./manifest.json">
+<title>StockAI Pro</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+/* ── TOKENS ───────────────────────────── */
+:root {
+  --bg:       #F7F8FA;
+  --white:    #FFFFFF;
+  --navy:     #0B1F3A;
+  --navy2:    #162E4A;
+  --blue:     #1B6FE8;
+  --blue-lt:  #EBF2FF;
+  --green:    #16A34A;
+  --green-lt: #DCFCE7;
+  --red:      #DC2626;
+  --red-lt:   #FEE2E2;
+  --amber:    #D97706;
+  --amber-lt: #FEF3C7;
+  --gray1:    #F1F3F6;
+  --gray2:    #E4E8EF;
+  --gray3:    #9AA5B8;
+  --border:   #E2E8F0;
+  --text:     #0B1F3A;
+  --shadow:   0 2px 12px rgba(11,31,58,.07);
+  --r:        16px;
+  --sbar-h:   50px;
+  --bnav-h:   72px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { font-size:15px; }
+
+body {
+  font-family:'Sora',sans-serif;
+  background:var(--navy);
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+}
+
+/* ── PHONE SHELL ──────────────────────── */
+.phone {
+  width:100%;
+  max-width:430px;
+  min-height:100vh;
+  background:var(--bg);
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden;
+}
+
+/* ── STATUS BAR ───────────────────────── */
+.sbar {
+  height:var(--sbar-h);
+  background:var(--white);
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 20px;
+  flex-shrink:0;
+  position:sticky;
+  top:0;
+  z-index:100;
+}
+.sbar-logo { font-size:17px; font-weight:700; color:var(--navy); letter-spacing:-.4px; }
+.sbar-logo em { color:var(--blue); font-style:normal; }
+.sbar-right { display:flex; align-items:center; gap:10px; }
+.sbar-clock { font-family:'DM Mono',monospace; font-size:13px; color:var(--gray3); }
+
+.bot-pill {
+  display:flex; align-items:center; gap:5px;
+  padding:4px 10px; border-radius:20px;
+  border:1.5px solid var(--border);
+  font-size:11px; font-weight:700; color:var(--gray3);
+  transition:all .3s;
+}
+.bot-pill.live  { border-color:var(--green); color:var(--green); background:var(--green-lt); }
+.bot-pill.stopped { border-color:var(--red); color:var(--red); background:var(--red-lt); }
+.bpd { width:6px; height:6px; border-radius:50%; background:currentColor; }
+.bot-pill.live .bpd { animation:blink 1.8s infinite; }
+@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+
+/* ── PAGE CONTAINER ───────────────────── */
+.pages {
+  flex:1;
+  overflow:hidden;
+  position:relative;
+}
+
+.page {
+  position:absolute;
+  inset:0;
+  overflow-y:auto;
+  padding:16px 14px calc(var(--bnav-h) + 16px);
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  background:var(--bg);
+  transition:transform .28s cubic-bezier(.4,0,.2,1), opacity .28s ease;
+  will-change:transform;
+}
+.page::-webkit-scrollbar{display:none}
+
+/* Slide states */
+.page.hidden-left  { transform:translateX(-100%); opacity:0; pointer-events:none; }
+.page.hidden-right { transform:translateX(100%);  opacity:0; pointer-events:none; }
+.page.active       { transform:translateX(0);      opacity:1; }
+
+/* ── BOTTOM NAV ───────────────────────── */
+.bnav {
+  position:sticky;
+  bottom:0;
+  height:var(--bnav-h);
+  background:var(--white);
+  border-top:1px solid var(--border);
+  display:flex;
+  z-index:100;
+  flex-shrink:0;
+}
+.ni {
+  flex:1;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:3px; cursor:pointer;
+  position:relative;
+  padding-bottom:10px;
+}
+.ni::after {
+  content:'';
+  position:absolute;
+  bottom:0; left:20%; right:20%;
+  height:2.5px;
+  border-radius:2px;
+  background:var(--blue);
+  transform:scaleX(0);
+  transition:transform .25s ease;
+}
+.ni.on::after { transform:scaleX(1); }
+.ni-icon { font-size:21px; transition:transform .2s; }
+.ni.on .ni-icon { transform:translateY(-1px); }
+.ni-lbl { font-size:9px; font-weight:700; letter-spacing:.5px; color:var(--gray3); text-transform:uppercase; transition:color .2s; }
+.ni.on .ni-lbl { color:var(--blue); }
+
+/* ── COMMON CARD ──────────────────────── */
+.card {
+  background:var(--white);
+  border-radius:var(--r);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.c-head {
+  padding:14px 16px 0;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.c-ttl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:var(--gray3); }
+.badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; }
+.badge.blue  { background:var(--blue-lt); color:var(--blue); }
+.badge.green { background:var(--green-lt); color:var(--green); }
+.badge.amber { background:var(--amber-lt); color:var(--amber); }
+.badge.red   { background:var(--red-lt); color:var(--red); }
+
+/* ── HERO ─────────────────────────────── */
+.hero-card {
+  background:var(--navy);
+  border-radius:var(--r);
+  padding:20px;
+  color:white;
+  position:relative;
+  overflow:hidden;
+}
+.hero-card::before {
+  content:'';
+  position:absolute;
+  top:-40px; right:-40px;
+  width:180px; height:180px;
+  border-radius:50%;
+  background:rgba(27,111,232,.15);
+}
+.hero-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:rgba(255,255,255,.5); margin-bottom:6px; }
+.hero-val { font-family:'DM Mono',monospace; font-size:38px; font-weight:500; line-height:1; margin-bottom:10px; }
+.hero-chip {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:4px 12px; border-radius:20px;
+  font-size:13px; font-weight:600;
+}
+.hero-chip.up   { background:rgba(22,163,74,.2); color:#4ade80; }
+.hero-chip.dn   { background:rgba(220,38,38,.2); color:#f87171; }
+.hero-chip.flat { background:rgba(255,255,255,.1); color:rgba(255,255,255,.5); }
+.hero-row { display:flex; justify-content:space-between; align-items:flex-end; }
+.hero-sub { font-size:11px; color:rgba(255,255,255,.4); margin-top:8px; }
+
+/* ── COUNTDOWN ────────────────────────── */
+.cd-body { padding:14px 16px 16px; }
+.cd-row { display:flex; align-items:center; gap:12px; }
+.cd-icon { font-size:30px; flex-shrink:0; }
+.cd-info { flex:1; }
+.cd-lbl { font-size:11px; font-weight:600; color:var(--gray3); margin-bottom:3px; }
+.cd-val { font-family:'DM Mono',monospace; font-size:24px; font-weight:500; color:var(--navy); }
+.cd-sub { font-size:11px; color:var(--gray3); margin-top:2px; }
+.prog-track { height:4px; background:var(--gray2); border-radius:2px; margin-top:10px; overflow:hidden; }
+.prog-fill  { height:100%; border-radius:2px; background:var(--blue); transition:width 1s linear; }
+
+/* ── STATS ROW ────────────────────────── */
+.stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.stat-c {
+  background:var(--white); border-radius:14px;
+  padding:12px 10px; box-shadow:var(--shadow); text-align:center;
+}
+.sl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:var(--gray3); margin-bottom:5px; }
+.sv { font-family:'DM Mono',monospace; font-size:15px; font-weight:500; color:var(--navy); }
+.sv.g{color:var(--green)}.sv.r{color:var(--red)}.sv.b{color:var(--blue)}.sv.a{color:var(--amber)}
+
+/* ── HOLDINGS ─────────────────────────── */
+.hold-list { padding:0 0 4px; }
+.hold-row {
+  display:flex; align-items:center; gap:12px;
+  padding:13px 16px; border-bottom:1px solid var(--border);
+}
+.hold-row:last-child { border-bottom:none; }
+.hold-icon {
+  width:40px; height:40px; border-radius:11px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:800; flex-shrink:0;
+  background:var(--blue-lt); color:var(--blue); letter-spacing:-.5px;
+}
+.hold-info { flex:1; min-width:0; }
+.hold-ticker { font-size:15px; font-weight:700; color:var(--navy); }
+.hold-detail { font-size:11px; color:var(--gray3); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hold-right { text-align:right; flex-shrink:0; }
+.hold-val { font-family:'DM Mono',monospace; font-size:14px; font-weight:500; color:var(--navy); }
+.hold-pnl { font-size:11px; font-weight:600; margin-top:2px; }
+.up{color:var(--green)}.dn{color:var(--red)}
+
+/* ── SELL BUTTON ──────────────────────── */
+.sell-row { padding:0 16px 12px; }
+.sell-btn {
+  width:100%; padding:10px; border-radius:10px;
+  border:1.5px solid #FCA5A5; background:var(--red-lt);
+  color:var(--red); font-family:'Sora',sans-serif;
+  font-size:12px; font-weight:700; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  transition:all .2s;
+}
+.sell-btn:hover { background:#FECACA; }
+.sell-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+/* ── AI REASON BOX ────────────────────── */
+.reason-box {
+  background:var(--navy); border-radius:12px;
+  padding:14px; font-size:13px; line-height:1.7;
+  color:rgba(255,255,255,.85); min-height:70px; position:relative;
+}
+.r-tag {
+  position:absolute; top:10px; right:10px;
+  font-size:9px; font-weight:700; padding:2px 7px;
+  border-radius:6px; background:rgba(255,255,255,.1); color:rgba(255,255,255,.5);
+}
+
+/* ── HISTORY ──────────────────────────── */
+.rb-list { max-height:300px; overflow-y:auto; }
+.rb-list::-webkit-scrollbar{display:none}
+.rb-row {
+  padding:12px 16px; border-bottom:1px solid var(--border);
+  display:flex; flex-direction:column; gap:5px;
+  animation:sl .3s ease;
+}
+@keyframes sl{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+.rb-row:last-child { border-bottom:none; }
+.rb-top { display:flex; justify-content:space-between; align-items:center; }
+.rb-time { font-size:11px; font-weight:700; color:var(--gray3); font-family:'DM Mono',monospace; }
+.rb-ok { font-size:10px; padding:2px 7px; border-radius:6px; font-weight:700; }
+.rb-ok.ok   { background:var(--green-lt); color:var(--green); }
+.rb-ok.fail { background:var(--red-lt); color:var(--red); }
+.rb-sum { font-size:12px; color:var(--text); line-height:1.5; }
+.rb-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.rbc { font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; background:var(--blue-lt); color:var(--blue); }
+.rbc.sell { background:var(--red-lt); color:var(--red); }
+
+/* ── BUTTONS ──────────────────────────── */
+.btn-primary {
+  width:100%; padding:14px; border-radius:12px; border:none;
+  background:var(--navy); color:white;
+  font-family:'Sora',sans-serif; font-size:14px; font-weight:700;
+  cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  transition:all .2s;
+}
+.btn-primary:hover { background:var(--navy2); }
+.btn-primary.stop { background:var(--red-lt); color:var(--red); border:1.5px solid #FCA5A5; }
+.btn-primary:disabled { opacity:.4; cursor:not-allowed; }
+
+.btn-outline {
+  width:100%; padding:13px; border-radius:12px;
+  border:1.5px solid var(--blue); background:var(--blue-lt); color:var(--blue);
+  font-family:'Sora',sans-serif; font-size:14px; font-weight:700;
+  cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  transition:all .2s;
+}
+.btn-outline:hover { background:var(--blue); color:white; }
+.btn-outline:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ── SETTINGS FORM ────────────────────── */
+.settings-section { display:flex; flex-direction:column; gap:12px; }
+.s-block { background:var(--white); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden; }
+.s-block-head {
+  padding:14px 16px 0;
+  font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:2px; color:var(--gray3); margin-bottom:2px;
+}
+.s-block-body { padding:10px 16px 16px; display:flex; flex-direction:column; gap:10px; }
+
+.f-grp { display:flex; flex-direction:column; gap:5px; }
+.f-row { display:flex; gap:8px; }
+.f-row .f-grp { flex:1; }
+.f-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray3); }
+.f-inp {
+  width:100%; background:var(--bg); border:1.5px solid var(--border);
+  border-radius:10px; padding:11px 14px; font-size:14px;
+  font-family:'DM Mono',monospace; color:var(--navy); outline:none;
+  transition:border-color .2s;
+}
+.f-inp:focus { border-color:var(--blue); background:white; }
+select.f-inp { cursor:pointer; font-family:'Sora',sans-serif; font-size:13px; }
+.key-wrap { position:relative; }
+.key-wrap .f-inp { padding-right:44px; }
+.eye-btn {
+  position:absolute; right:12px; top:50%; transform:translateY(-50%);
+  background:none; border:none; font-size:17px; cursor:pointer; color:var(--gray3);
+  line-height:1;
+}
+
+/* settings info box */
+.info-box {
+  background:var(--blue-lt); border-radius:10px;
+  padding:10px 13px; font-size:12px; color:#1B50A8; line-height:1.55;
+}
+.info-box.amber { background:var(--amber-lt); color:#92400E; }
+
+/* save button feedback */
+.save-feedback {
+  display:none; text-align:center; font-size:13px;
+  color:var(--green); font-weight:600; padding:4px 0;
+}
+
+/* ── MODE TOGGLE ──────────────────────── */
+.mode-tabs { display:flex; border-radius:10px; overflow:hidden; border:1.5px solid var(--border); }
+.mode-tab {
+  flex:1; padding:9px; text-align:center;
+  font-size:12px; font-weight:700; cursor:pointer;
+  color:var(--gray3); background:white; transition:all .2s;
+  border:none;
+}
+.mode-tab.on { background:var(--navy); color:white; }
+
+/* ── PWA INSTALL BANNER ───────────────── */
+.install-banner {
+  display:none;
+  background:var(--navy); color:white;
+  border-radius:var(--r); padding:14px 16px;
+  display:flex; align-items:center; gap:12px;
+}
+.install-banner.hidden { display:none; }
+.ib-icon { font-size:28px; flex-shrink:0; }
+.ib-info { flex:1; }
+.ib-title { font-size:13px; font-weight:700; margin-bottom:3px; }
+.ib-sub { font-size:11px; color:rgba(255,255,255,.6); line-height:1.4; }
+.ib-btn {
+  padding:8px 14px; border-radius:8px; border:none;
+  background:var(--blue); color:white; font-family:'Sora',sans-serif;
+  font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0;
+  white-space:nowrap;
+}
+
+/* ── AI BOT TAB ───────────────────────── */
+.ai-body { padding:12px 16px 14px; display:flex; flex-direction:column; gap:10px; }
+.sig-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.sig-chip { background:var(--bg); border-radius:10px; padding:9px 10px; }
+.sig-chip .sl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray3); margin-bottom:4px; }
+.sig-chip .sv { font-family:'DM Mono',monospace; font-size:13px; font-weight:500; }
+.sv.buy{color:var(--green)}.sv.sell{color:var(--red)}.sv.neu{color:var(--amber)}
+
+.dec-row { display:flex; align-items:center; gap:10px; }
+.dec-badge {
+  padding:12px 16px; border-radius:12px;
+  font-size:15px; font-weight:800; letter-spacing:2px; flex-shrink:0;
+}
+.dec-badge.BUY  { background:var(--green-lt); color:var(--green); }
+.dec-badge.SELL { background:var(--red-lt); color:var(--red); }
+.dec-badge.HOLD { background:var(--amber-lt); color:var(--amber); }
+.conf-wrap { flex:1; }
+.conf-lbl { font-size:11px; color:var(--gray3); margin-bottom:5px; }
+.conf-track { height:5px; background:var(--gray2); border-radius:3px; overflow:hidden; }
+.conf-bar { height:100%; border-radius:3px; background:var(--blue); transition:width .6s ease; }
+
+/* ── DOTS LOADER ──────────────────────── */
+.dots { display:flex; gap:4px; align-items:center; }
+.dots span {
+  width:5px; height:5px; border-radius:50%;
+  background:rgba(255,255,255,.6); animation:dk 1.2s infinite;
+}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes dk{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
+
+/* ── TOAST ────────────────────────────── */
+.toast {
+  display:none; position:fixed;
+  bottom:calc(var(--bnav-h) + 12px); left:50%; transform:translateX(-50%);
+  background:var(--navy); color:white; padding:10px 20px;
+  border-radius:20px; font-size:13px; font-weight:500;
+  z-index:999; white-space:nowrap;
+  box-shadow:0 4px 20px rgba(0,0,0,.2);
+  animation:tin .3s ease;
+}
+@keyframes tin{from{opacity:0;transform:translateX(-50%) translateY(6px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+/* empty state */
+.empty { padding:22px; text-align:center; font-size:13px; color:var(--gray3); line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- ── STATUS BAR ── -->
+  <div class="sbar">
+    <div class="sbar-logo">Stock<em>AI</em></div>
+    <div class="sbar-right">
+      <span class="sbar-clock" id="clk">9:41</span>
+      <div class="bot-pill" id="botPill"><span class="bpd"></span><span id="botLbl">대기중</span></div>
+    </div>
+  </div>
+
+  <!-- ── PAGES ── -->
+  <div class="pages">
+
+    <!-- ════════ PAGE 0: HOME ════════ -->
+    <div class="page active" id="page-home">
+
+      <!-- PWA 설치 배너 (조건부 표시) -->
+      <div class="install-banner hidden" id="installBanner">
+        <div class="ib-icon">📲</div>
+        <div class="ib-info">
+          <div class="ib-title">앱으로 설치하기</div>
+          <div class="ib-sub">홈 화면에 추가하면 앱처럼 실행됩니다</div>
+        </div>
+        <button class="ib-btn" id="installBtn">설치</button>
+      </div>
+
+      <!-- 총 자산 Hero -->
+      <div class="hero-card">
+        <div class="hero-lbl">총 자산 (시뮬레이션)</div>
+        <div class="hero-val" id="heroVal">$500.00</div>
+        <div class="hero-row">
+          <div class="hero-chip flat" id="heroChip">±$0.00 (0.00%)</div>
+          <div class="hero-sub" id="heroSub">초기 $500.00</div>
+        </div>
+      </div>
+
+      <!-- 다음 리밸런싱 카운트다운 -->
+      <div class="card">
+        <div class="c-head">
+          <div class="c-ttl">⏰ 다음 리밸런싱</div>
+          <div class="badge amber" id="mktBadge">장 마감</div>
+        </div>
+        <div class="cd-body">
+          <div class="cd-row">
+            <div class="cd-icon" id="cdIcon">🌙</div>
+            <div class="cd-info">
+              <div class="cd-lbl" id="cdLbl">봇 시작 후 카운트다운 시작</div>
+              <div class="cd-val" id="cdVal">--:--:--</div>
+              <div class="cd-sub" id="cdSub">매일 1회 자동 리밸런싱</div>
+            </div>
+          </div>
+          <div class="prog-track"><div class="prog-fill" id="cdProg" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- 통계 -->
+      <div class="stats-row">
+        <div class="stat-c"><div class="sl">현금</div><div class="sv" id="sCash">$500</div></div>
+        <div class="stat-c"><div class="sl">보유종목</div><div class="sv b" id="sHold">0</div></div>
+        <div class="stat-c"><div class="sl">리밸런싱</div><div class="sv a" id="sRb">0회</div></div>
+      </div>
+
+      <!-- 보유 포트폴리오 -->
+      <div class="card">
+        <div class="c-head">
+          <div class="c-ttl">💼 보유 포트폴리오</div>
+          <div class="badge green">AI 선택</div>
+        </div>
+        <div class="hold-list" id="holdList">
+          <div class="empty">봇 시작 후 AI가<br>S&amp;P500에서 종목을 선택합니다</div>
+        </div>
+      </div>
+
+      <!-- 즉시 리밸런싱 -->
+      <button class="btn-outline" id="nowBtn" disabled onclick="triggerNow()">
+        🔄 지금 즉시 리밸런싱
+      </button>
+
+      <!-- 리밸런싱 이력 -->
+      <div class="card">
+        <div class="c-head" style="padding-bottom:2px">
+          <div class="c-ttl">📋 리밸런싱 이력</div>
+          <div class="badge blue" id="rbCountBadge">0건</div>
+        </div>
+        <div class="rb-list" id="rbList">
+          <div class="empty">아직 이력이 없습니다</div>
+        </div>
+      </div>
+
+    </div><!-- /page-home -->
+
+    <!-- ════════ PAGE 1: AI BOT ════════ -->
+    <div class="page hidden-right" id="page-bot">
+
+      <!-- 봇 시작/중지 -->
+      <div class="card">
+        <div class="c-head"><div class="c-ttl">🤖 AI 봇 제어</div></div>
+        <div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px">
+          <div class="info-box">
+            설정 탭에서 API 키를 먼저 저장하세요.<br>
+            봇이 실행되면 매일 <strong id="botTimeDisplay">09:35 KST</strong>에 자동 리밸런싱합니다.
+          </div>
+          <button class="btn-primary" id="goBtn" onclick="toggleBot()">▶ 자동매매 시작</button>
+        </div>
+      </div>
+
+      <!-- AI 분석 결과 -->
+      <div class="card">
+        <div class="c-head">
+          <div class="c-ttl">📊 최근 AI 분석</div>
+          <div class="badge blue" id="aiEngineLbl">Gemini 2.0 Flash</div>
+        </div>
+        <div class="ai-body">
+          <div class="sig-grid">
+            <div class="sig-chip"><div class="sl">선택 종목 수</div><div class="sv neu" id="siStocks">—</div></div>
+            <div class="sig-chip"><div class="sl">포트폴리오 수익</div><div class="sv neu" id="siPnl">—</div></div>
+            <div class="sig-chip"><div class="sl">매수 완료</div><div class="sv buy" id="siBuys">—</div></div>
+            <div class="sig-chip"><div class="sl">매도 완료</div><div class="sv sell" id="siSells">—</div></div>
+          </div>
+          <div class="reason-box" id="reasonBox">
+            <span class="r-tag">대기중</span>
+            봇을 시작하면 Gemini 2.0 Flash가<br>
+            S&amp;P500 전체에서 오늘의 최적 종목을 선택합니다.
+          </div>
+          <div class="dec-row">
+            <div class="dec-badge HOLD" id="decBadge">HOLD</div>
+            <div class="conf-wrap">
+              <div class="conf-lbl">AI 신뢰도: <span id="confTxt">—</span></div>
+              <div class="conf-track"><div class="conf-bar" id="confBar" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page-bot -->
+
+    <!-- ════════ PAGE 2: ASSETS ════════ -->
+    <div class="page hidden-right" id="page-assets">
+
+      <div class="hero-card">
+        <div class="hero-lbl">평가 자산</div>
+        <div class="hero-val" id="assetVal">$500.00</div>
+        <div class="hero-row">
+          <div class="hero-chip flat" id="assetChip">±$0.00</div>
+          <div class="hero-sub" id="assetSub">0종목 보유</div>
+        </div>
+      </div>
+
+      <!-- 현금 / 주식 비중 -->
+      <div class="card">
+        <div class="c-head"><div class="c-ttl">📊 자산 구성</div></div>
+        <div style="padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:var(--gray3)">현금</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:500" id="aCash">$500.00</span>
+          </div>
+          <div style="height:8px;background:var(--gray2);border-radius:4px;overflow:hidden">
+            <div id="cashBar" style="height:100%;background:var(--blue);border-radius:4px;transition:width .6s ease;width:100%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:var(--gray3)">주식 평가액</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:500" id="aStock">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 보유 종목 상세 -->
+      <div class="card">
+        <div class="c-head"><div class="c-ttl">🏦 보유 종목</div></div>
+        <div id="assetHoldList">
+          <div class="empty">보유 종목이 없습니다</div>
+        </div>
+      </div>
+
+      <!-- 수익 요약 -->
+      <div class="stats-row">
+        <div class="stat-c"><div class="sl">총 투자</div><div class="sv" id="aInvest">$0</div></div>
+        <div class="stat-c"><div class="sl">평가손익</div><div class="sv" id="aPnl">$0</div></div>
+        <div class="stat-c"><div class="sl">수익률</div><div class="sv" id="aPct">0%</div></div>
+      </div>
+
+    </div><!-- /page-assets -->
+
+    <!-- ════════ PAGE 3: SETTINGS ════════ -->
+    <div class="page hidden-right" id="page-settings">
+
+      <div class="settings-section">
+
+        <!-- KIS API -->
+        <div class="s-block">
+          <div class="s-block-head">🏦 한국투자증권 (KIS) API</div>
+          <div class="s-block-body">
+            <div class="info-box amber">
+              ⚠️ 처음엔 반드시 <strong>모의투자</strong>로 테스트하세요!<br>
+              <a href="https://apiportal.koreainvestment.com" target="_blank" style="color:#92400E;font-weight:700">KIS Developers →</a>에서 키 발급
+            </div>
+            <div class="f-grp">
+              <div class="f-lbl">App Key</div>
+              <div class="key-wrap">
+                <input type="password" class="f-inp" id="kisKey" placeholder="발급받은 AppKey (36자리)">
+                <button class="eye-btn" onclick="toggleVis('kisKey')">👁</button>
+              </div>
+            </div>
+            <div class="f-grp">
+              <div class="f-lbl">App Secret</div>
+              <div class="key-wrap">
+                <input type="password" class="f-inp" id="kisSecret" placeholder="발급받은 SecretKey (180자리)">
+                <button class="eye-btn" onclick="toggleVis('kisSecret')">👁</button>
+              </div>
+            </div>
+            <div class="f-row">
+              <div class="f-grp">
+                <div class="f-lbl">계좌번호</div>
+                <input type="text" class="f-inp" id="kisAccount" placeholder="12345678-01">
+              </div>
+              <div class="f-grp">
+                <div class="f-lbl">HTS ID</div>
+                <input type="text" class="f-inp" id="kisHts" placeholder="HTS 로그인 ID">
+              </div>
+            </div>
+            <div class="f-grp">
+              <div class="f-lbl">투자 모드</div>
+              <div class="mode-tabs">
+                <button class="mode-tab on" id="modeVirt" onclick="setMode('virtual',this)">🛡 모의투자</button>
+                <button class="mode-tab" id="modeReal" onclick="setMode('real',this)">💰 실전투자</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gemini -->
+        <div class="s-block">
+          <div class="s-block-head">🤖 Gemini AI</div>
+          <div class="s-block-body">
+            <div class="info-box">
+              Gemini 2.0 Flash 사용 · 하루 1회 호출 = 무료 티어로 충분<br>
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1B50A8;font-weight:700">API Key 발급 →</a>
+            </div>
+            <div class="f-grp">
+              <div class="f-lbl">Gemini API Key</div>
+              <div class="key-wrap">
+                <input type="password" class="f-inp" id="geminiKey" placeholder="AIza...">
+                <button class="eye-btn" onclick="toggleVis('geminiKey')">👁</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 전략 -->
+        <div class="s-block">
+          <div class="s-block-head">⚙ 투자 전략</div>
+          <div class="s-block-body">
+            <div class="f-row">
+              <div class="f-grp">
+                <div class="f-lbl">예산 (USD)</div>
+                <input type="number" class="f-inp" id="budget" value="500" min="100" step="50">
+              </div>
+              <div class="f-grp">
+                <div class="f-lbl">리밸런싱 시각 (KST)</div>
+                <input type="time" class="f-inp" id="rebalTime" value="09:35">
+              </div>
+            </div>
+            <div class="f-row">
+              <div class="f-grp">
+                <div class="f-lbl">최대 종목 수</div>
+                <select class="f-inp" id="maxStocks">
+                  <option value="1">1종목 집중</option>
+                  <option value="2">2종목</option>
+                  <option value="3" selected>3종목</option>
+                  <option value="5">5종목</option>
+                </select>
+              </div>
+              <div class="f-grp">
+                <div class="f-lbl">백엔드 URL</div>
+                <input type="text" class="f-inp" id="backendUrl" value="http://localhost:8000" placeholder="서버 주소">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="saveSettings()">💾 설정 저장</button>
+        <div class="save-feedback" id="saveFeedback">✅ 저장 완료!</div>
+
+        <!-- PWA 설치 안내 -->
+        <div class="s-block">
+          <div class="s-block-head">📱 앱 설치 방법</div>
+          <div class="s-block-body">
+            <div class="info-box">
+              <strong>iOS (Safari)</strong><br>
+              공유 버튼 → "홈 화면에 추가" 탭<br><br>
+              <strong>Android (Chrome)</strong><br>
+              메뉴 → "홈 화면에 추가" 또는 주소창 오른쪽 설치 아이콘<br><br>
+              설치 후 앱 아이콘으로 전체화면 실행됩니다!
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /page-settings -->
+
+  </div><!-- /pages -->
+
+  <!-- ── BOTTOM NAV ── -->
+  <div class="bnav">
+    <div class="ni on"  onclick="goTab(0)"><div class="ni-icon">🏠</div><div class="ni-lbl">홈</div></div>
+    <div class="ni"     onclick="goTab(1)"><div class="ni-icon">🤖</div><div class="ni-lbl">AI봇</div></div>
+    <div class="ni"     onclick="goTab(2)"><div class="ni-icon">💼</div><div class="ni-lbl">자산</div></div>
+    <div class="ni"     onclick="goTab(3)"><div class="ni-icon">⚙️</div><div class="ni-lbl">설정</div></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div><!-- /phone -->
+
+<script>
+/* ══════════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════════ */
+const PAGE_IDS = ['page-home','page-bot','page-assets','page-settings'];
+let curTab = 0;
+
+function goTab(idx) {
+  if (idx === curTab) return;
+
+  const dir = idx > curTab ? 1 : -1;
+  const prev = document.getElementById(PAGE_IDS[curTab]);
+  const next = document.getElementById(PAGE_IDS[idx]);
+
+  // Outgoing
+  prev.classList.remove('active');
+  prev.classList.add(dir > 0 ? 'hidden-left' : 'hidden-right');
+
+  // Incoming: position off-screen first
+  next.classList.remove('hidden-left','hidden-right','active');
+  next.classList.add(dir > 0 ? 'hidden-right' : 'hidden-left');
+
+  // Trigger reflow then animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      next.classList.remove('hidden-left','hidden-right');
+      next.classList.add('active');
+    });
+  });
+
+  // Nav items
+  document.querySelectorAll('.ni').forEach((n,i) => n.classList.toggle('on', i===idx));
+
+  curTab = idx;
+
+  // Sync assets page when opened
+  if (idx === 2) renderAssets();
+}
+
+/* ══════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════ */
+let S = {
+  running: false,
+  risk: 'moderate',
+  budget: 500,
+  budget0: 500,
+  rebalTime: '09:35',
+  maxStocks: 3,
+  virtual: true,
+  backendUrl: 'http://localhost:8000',
+  portfolio: { cash:500, total:500, pnl:0, holdings:{} },
+  rbHistory: [],
+  rbCount: 0,
+  pollId: null,
+};
+
+// Simulation state
+let SIM = { holdings:{}, cash:500, budget:500 };
+
+const SAMPLE = [
+  {t:'NVDA', p:875,  r:'AI 반도체 수요 폭증'},
+  {t:'MSFT', p:415,  r:'Azure 클라우드 성장'},
+  {t:'AAPL', p:185,  r:'iPhone 수요 회복'},
+  {t:'AMZN', p:185,  r:'AWS + 광고 매출 호조'},
+  {t:'META', p:500,  r:'광고 급증, AI 성과'},
+  {t:'GOOGL',p:165,  r:'검색 광고 회복'},
+  {t:'SPY',  p:510,  r:'S&P500 ETF 분산'},
+  {t:'QQQ',  p:440,  r:'기술주 ETF 성장'},
+  {t:'BRK.B',p:390,  r:'가치주 안전 헤지'},
+  {t:'JPM',  p:200,  r:'금리 수혜 대형 은행'},
+];
+
+/* ══════════════════════════════════════════════
+   CLOCK & MARKET
+══════════════════════════════════════════════ */
+function tick() {
+  const n = new Date();
+  document.getElementById('clk').textContent =
+    n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
+}
+setInterval(tick, 15000); tick();
+
+function isMarketOpen() {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const mar = new Date(Date.UTC(y,2,1));
+  const dstS = new Date(Date.UTC(y,2, 8+(7-mar.getUTCDay())%7+1));
+  const nov = new Date(Date.UTC(y,10,1));
+  const dstE = new Date(Date.UTC(y,10, 1+(7-nov.getUTCDay())%7));
+  const isDST = now >= dstS && now < dstE;
+  const nyMins = ((now.getUTCHours()-(isDST?4:5)+24)%24)*60 + now.getUTCMinutes();
+  const wd = now.getUTCDay();
+  return wd>=1 && wd<=5 && nyMins>=570 && nyMins<960;
+}
+
+function getNextRebal() {
+  const [h,m] = S.rebalTime.split(':').map(Number);
+  const now = new Date();
+  // Convert rebalTime (KST) to UTC
+  let t = new Date(now);
+  t.setUTCHours(h-9, m, 0, 0);
+  if (t <= now) t.setUTCDate(t.getUTCDate()+1);
+  while ([0,6].includes(t.getUTCDay())) t.setUTCDate(t.getUTCDate()+1);
+  return t;
+}
+
+function updateCountdown() {
+  const open = isMarketOpen();
+  const badge = document.getElementById('mktBadge');
+  badge.textContent = open ? '장 개장 중' : '장 마감';
+  badge.className = 'badge '+(open?'green':'amber');
+  document.getElementById('cdIcon').textContent = open ? '🇺🇸' : '🌙';
+
+  if (!S.running) {
+    document.getElementById('cdLbl').textContent = '봇 시작 후 카운트다운 시작';
+    document.getElementById('cdVal').textContent = '--:--:--';
+    document.getElementById('cdSub').textContent = '매일 1회 자동 리밸런싱';
+    document.getElementById('cdProg').style.width = '0%';
+    return;
+  }
+
+  const now = new Date();
+  const next = getNextRebal();
+  const diff = next - now;
+  if (diff <= 0) { document.getElementById('cdVal').textContent = '리밸런싱 중…'; return; }
+
+  const hh = Math.floor(diff/3600000);
+  const mm = Math.floor((diff%3600000)/60000);
+  const ss = Math.floor((diff%60000)/1000);
+  document.getElementById('cdLbl').textContent = '다음 리밸런싱까지';
+  document.getElementById('cdVal').textContent =
+    `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}:${ss.toString().padStart(2,'0')}`;
+  document.getElementById('cdSub').textContent =
+    next.toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' KST';
+  const pct = Math.min(100, ((86400000-diff)/86400000)*100);
+  document.getElementById('cdProg').style.width = pct.toFixed(1)+'%';
+}
+setInterval(updateCountdown, 1000); updateCountdown();
+
+/* ══════════════════════════════════════════════
+   SETTINGS
+══════════════════════════════════════════════ */
+let virtMode = true;
+
+function toggleVis(id) {
+  const el = document.getElementById(id);
+  el.type = el.type==='password' ? 'text' : 'password';
+}
+
+function setMode(mode, el) {
+  virtMode = mode === 'virtual';
+  document.getElementById('modeVirt').classList.toggle('on', virtMode);
+  document.getElementById('modeReal').classList.toggle('on', !virtMode);
+}
+
+function saveSettings() {
+  S.budget = parseFloat(document.getElementById('budget').value)||500;
+  S.rebalTime = document.getElementById('rebalTime').value||'09:35';
+  S.maxStocks = parseInt(document.getElementById('maxStocks').value)||3;
+  S.backendUrl = document.getElementById('backendUrl').value.trim()||'http://localhost:8000';
+  S.virtual = virtMode;
+
+  document.getElementById('botTimeDisplay').textContent = S.rebalTime + ' KST';
+
+  // localStorage 저장 (키 제외 — 보안)
+  try {
+    localStorage.setItem('stockai_settings', JSON.stringify({
+      budget: S.budget, rebalTime: S.rebalTime,
+      maxStocks: S.maxStocks, backendUrl: S.backendUrl, virtual: S.virtual
+    }));
+  } catch(e){}
+
+  const fb = document.getElementById('saveFeedback');
+  fb.style.display = 'block';
+  setTimeout(()=>fb.style.display='none', 2000);
+  showToast('✅ 설정 저장됨');
+}
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('stockai_settings')||'{}');
+    if (saved.budget)    { document.getElementById('budget').value = saved.budget; S.budget = saved.budget; S.budget0 = saved.budget; }
+    if (saved.rebalTime) { document.getElementById('rebalTime').value = saved.rebalTime; S.rebalTime = saved.rebalTime; }
+    if (saved.maxStocks) { document.getElementById('maxStocks').value = saved.maxStocks; S.maxStocks = saved.maxStocks; }
+    if (saved.backendUrl){ document.getElementById('backendUrl').value = saved.backendUrl; S.backendUrl = saved.backendUrl; }
+    if (saved.virtual !== undefined) { virtMode = saved.virtual; setMode(virtMode?'virtual':'real', null); }
+  } catch(e){}
+}
+
+/* ══════════════════════════════════════════════
+   UI RENDER
+══════════════════════════════════════════════ */
+function fmt(v) { return (v>=0?'+':'-')+'$'+Math.abs(v).toFixed(2); }
+
+function renderPortfolio() {
+  const p = S.portfolio;
+  const diff = p.pnl;
+  const pct = S.budget0 ? (diff/S.budget0*100).toFixed(2) : '0.00';
+
+  // Home hero
+  document.getElementById('heroVal').textContent = '$'+p.total.toFixed(2);
+  document.getElementById('heroSub').textContent = '초기 $'+S.budget0.toFixed(2);
+  const chip = document.getElementById('heroChip');
+  chip.textContent = fmt(diff)+' ('+( diff>=0?'+':'')+pct+'%)';
+  chip.className = 'hero-chip '+(diff>0?'up':diff<0?'dn':'flat');
+
+  // Stats
+  document.getElementById('sCash').textContent = '$'+p.cash.toFixed(0);
+  document.getElementById('sHold').textContent = Object.keys(p.holdings).length;
+  document.getElementById('sRb').textContent = S.rbCount+'회';
+
+  // Holdings (home)
+  renderHoldingsList('holdList', p.holdings, true);
+
+  // AI bot tab signals
+  const lastRb = S.rbHistory[S.rbHistory.length-1];
+  if (lastRb) {
+    document.getElementById('siStocks').textContent = (lastRb.buys||[]).length+'종목';
+    const pnlEl = document.getElementById('siPnl');
+    pnlEl.textContent = fmt(diff);
+    pnlEl.className = 'sv '+(diff>=0?'buy':'sell');
+    document.getElementById('siBuys').textContent = (lastRb.buys||[]).length+'건';
+    document.getElementById('siSells').textContent = (lastRb.sells||[]).length+'건';
+  }
+}
+
+function renderHoldingsList(containerId, holdings, withSellBtn) {
+  const el = document.getElementById(containerId);
+  if (!Object.keys(holdings).length) {
+    el.innerHTML = '<div class="empty">보유 종목 없음</div>';
+    return;
+  }
+  el.innerHTML = Object.entries(holdings).map(([ticker, d]) => {
+    const price = d.current_price || d.avg_price;
+    const val = d.qty * price;
+    const pnl = d.qty*(price - d.avg_price);
+    const pnlPct = d.avg_price ? (pnl/(d.qty*d.avg_price)*100) : 0;
+    const sellBtn = withSellBtn ? `
+      <div class="sell-row">
+        <button class="sell-btn" onclick="sellNow('${ticker}')">💸 ${ticker} 전량 매도 (수동)</button>
+      </div>` : '';
+    return `
+      <div class="hold-row">
+        <div class="hold-icon">${ticker.slice(0,4)}</div>
+        <div class="hold-info">
+          <div class="hold-ticker">${ticker}</div>
+          <div class="hold-detail">${d.qty.toFixed(4)}주 · 평균 $${d.avg_price.toFixed(2)}</div>
+        </div>
+        <div class="hold-right">
+          <div class="hold-val">$${val.toFixed(2)}</div>
+          <div class="hold-pnl ${pnl>=0?'up':'dn'}">${fmt(pnl)} (${pnl>=0?'+':''}${pnlPct.toFixed(1)}%)</div>
+        </div>
+      </div>${sellBtn}`;
+  }).join('');
+}
+
+function renderAssets() {
+  const p = S.portfolio;
+  const stockVal = Object.values(p.holdings).reduce((a,h)=>a+h.qty*(h.current_price||h.avg_price),0);
+  const total = p.cash + stockVal;
+  const cashPct = total > 0 ? (p.cash/total*100) : 100;
+
+  document.getElementById('assetVal').textContent = '$'+total.toFixed(2);
+  const diff = total - S.budget0;
+  const aChip = document.getElementById('assetChip');
+  aChip.textContent = fmt(diff);
+  aChip.className = 'hero-chip '+(diff>0?'up':diff<0?'dn':'flat');
+  document.getElementById('assetSub').textContent = Object.keys(p.holdings).length+'종목 보유';
+  document.getElementById('aCash').textContent = '$'+p.cash.toFixed(2);
+  document.getElementById('aStock').textContent = '$'+stockVal.toFixed(2);
+  document.getElementById('cashBar').style.width = cashPct.toFixed(1)+'%';
+  document.getElementById('aInvest').textContent = '$'+S.budget0.toFixed(0);
+  document.getElementById('aPnl').textContent = fmt(diff);
+  document.getElementById('aPnl').className = 'sv '+(diff>=0?'g':'r');
+  document.getElementById('aPct').textContent = (S.budget0?(diff/S.budget0*100):0).toFixed(2)+'%';
+  document.getElementById('aPct').className = 'sv '+(diff>=0?'g':'r');
+
+  renderHoldingsList('assetHoldList', p.holdings, false);
+}
+
+function renderHistory() {
+  document.getElementById('rbCountBadge').textContent = S.rbHistory.length+'건';
+  const list = document.getElementById('rbList');
+  if (!S.rbHistory.length) {
+    list.innerHTML = '<div class="empty">아직 이력이 없습니다</div>';
+    return;
+  }
+  list.innerHTML = [...S.rbHistory].reverse().map(r => {
+    const buys = (r.buys||[]).map(b=>`<span class="rbc">${b.ticker}</span>`).join('');
+    const sells= (r.sells||[]).map(s=>`<span class="rbc sell">${s.ticker}↓</span>`).join('');
+    const date = new Date(r.timestamp).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `
+      <div class="rb-row">
+        <div class="rb-top">
+          <span class="rb-time">${date}</span>
+          <span class="rb-ok ${r.success?'ok':'fail'}">${r.success?'성공':'실패'}</span>
+        </div>
+        <div class="rb-sum">${r.ai_summary||r.error||'—'}</div>
+        <div class="rb-chips">${sells}${buys}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════
+   BACKEND API
+══════════════════════════════════════════════ */
+async function apiCall(path, method='GET', body=null) {
+  const r = await fetch(S.backendUrl+path, {
+    method,
+    headers:{'Content-Type':'application/json'},
+    ...(body ? {body:JSON.stringify(body)} : {})
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function pollStatus() {
+  try {
+    const st = await apiCall('/status');
+    S.portfolio = { cash:st.cash_usd, total:st.total_usd, pnl:st.pnl_usd, holdings:st.holdings||{} };
+    const h = await apiCall('/history');
+    S.rbHistory = h.history||[];
+    S.rbCount = S.rbHistory.length;
+    if (S.rbHistory.length) {
+      const last = S.rbHistory[S.rbHistory.length-1];
+      document.getElementById('reasonBox').innerHTML =
+        `<span class="r-tag">Gemini AI</span>${last.ai_summary||'분석 없음'}`;
+    }
+    renderPortfolio();
+    renderHistory();
+  } catch(e) { /* 백엔드 없음 */ }
+}
+
+/* ══════════════════════════════════════════════
+   SIMULATION (Gemini 직접 호출)
+══════════════════════════════════════════════ */
+async function runSimRebalance() {
+  document.getElementById('reasonBox').innerHTML =
+    '<span class="r-tag">분석중</span><div class="dots"><span></span><span></span><span></span></div>';
+
+  const key = document.getElementById('geminiKey').value.trim();
+  let advice = null;
+
+  if (key) {
+    try {
+      const prompt = `당신은 미국 주식 포트폴리오 매니저입니다. 오늘의 포트폴리오를 JSON만 반환하세요 (마크다운 없이).
+
+예산: $${SIM.cash.toFixed(2)}
+리스크: ${S.risk}
+최대 종목 수: ${S.maxStocks}
+현재 보유: ${JSON.stringify(Object.keys(SIM.holdings))}
+
+S&P500 전체 (ETF 포함)에서 자유롭게 선택하세요.
+각 종목의 weight 합이 1.0이 되도록 하세요.
+
+{"picks":[{"ticker":"NVDA","weight":0.4,"reason":"이유"},{"ticker":"SPY","weight":0.6,"reason":"이유"}],"sell":[],"summary":"전략 요약 2문장"}`;
+
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-goog-api-key':key},
+        body:JSON.stringify({
+          contents:[{parts:[{text:prompt}]}],
+          generationConfig:{temperature:0.2,maxOutputTokens:600}
+        })
+      });
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text||'';
+      advice = JSON.parse(text.replace(/```json|```/g,'').trim());
+      document.getElementById('aiEngineLbl').textContent = 'Gemini 2.0 Flash';
+    } catch(e) { console.error('Gemini err',e); }
+  }
+
+  // Fallback
+  if (!advice) {
+    const picks = [...SAMPLE].sort(()=>Math.random()-.5).slice(0,S.maxStocks);
+    advice = {
+      picks: picks.map((p,i)=>({ ticker:p.t, weight:1/picks.length, reason:p.r })),
+      sell: Object.keys(SIM.holdings),
+      summary: 'AI 키 없음 — 규칙 기반 분산 포트폴리오 적용',
+    };
+    document.getElementById('aiEngineLbl').textContent = '규칙 기반';
+  }
+
+  // 매도
+  const sells = [];
+  for (const [ticker, h] of Object.entries(SIM.holdings)) {
+    SIM.cash += h.qty * h.price;
+    sells.push({ticker, qty:h.qty, price:h.price});
+  }
+  SIM.holdings = {};
+
+  // 매수
+  const buys = [];
+  for (const pick of (advice.picks||[]).slice(0,S.maxStocks)) {
+    const invest = SIM.cash * pick.weight;
+    const base = SAMPLE.find(s=>s.t===pick.ticker)?.p || 150;
+    const price = base * (0.985 + Math.random()*.03);
+    const qty = Math.floor(invest/price * 1000)/1000;
+    if (qty < 0.001) continue;
+    SIM.cash -= qty*price;
+    SIM.holdings[pick.ticker] = {qty, price, avg_price:price, current_price:price, pnl:0, pnl_pct:0, reason:pick.reason};
+    buys.push({ticker:pick.ticker, qty, price, invest_usd:qty*price, reason:pick.reason});
+  }
+
+  const stockVal = Object.values(SIM.holdings).reduce((a,h)=>a+h.qty*h.current_price,0);
+  S.portfolio = {
+    cash: SIM.cash,
+    total: SIM.cash + stockVal,
+    pnl: SIM.cash + stockVal - S.budget0,
+    holdings: Object.fromEntries(Object.entries(SIM.holdings).map(([t,h])=>[t,{
+      qty:h.qty, avg_price:h.avg_price, current_price:h.current_price,
+      pnl:h.qty*(h.current_price-h.avg_price), pnl_pct:((h.current_price-h.avg_price)/h.avg_price*100)
+    }]))
+  };
+
+  const conf = advice.picks?.length ? Math.min(95, 65 + advice.picks.length*5 + (key?20:0)) : 50;
+  document.getElementById('confTxt').textContent = conf+'%';
+  document.getElementById('confBar').style.width = conf+'%';
+  document.getElementById('decBadge').textContent = buys.length ? '▲ BUY' : '◆ HOLD';
+  document.getElementById('decBadge').className = 'dec-badge '+(buys.length?'BUY':'HOLD');
+
+  const rbEntry = {
+    timestamp: new Date().toISOString(), success:true,
+    ai_summary: advice.summary||'리밸런싱 완료',
+    picks: advice.picks||[], sells, buys,
+  };
+  S.rbHistory.push(rbEntry);
+  S.rbCount++;
+
+  document.getElementById('reasonBox').innerHTML =
+    `<span class="r-tag">${key?'Gemini AI':'규칙 기반'}</span>${advice.summary||''}`;
+
+  renderPortfolio();
+  renderHistory();
+  showToast(`✅ 리밸런싱 완료 — ${buys.length}종목 편입`);
+}
+
+/* ══════════════════════════════════════════════
+   BOT CONTROL
+══════════════════════════════════════════════ */
+async function toggleBot() {
+  if (!S.running) await startBot(); else stopBot();
+}
+
+async function startBot() {
+  S.budget0 = S.budget;
+  SIM = { holdings:{}, cash:S.budget, budget:S.budget };
+  S.portfolio = { cash:S.budget, total:S.budget, pnl:0, holdings:{} };
+  S.rbHistory = []; S.rbCount = 0;
+  S.running = true;
+
+  document.getElementById('botPill').className = 'bot-pill live';
+  document.getElementById('botLbl').textContent = '실행중';
+  document.getElementById('goBtn').className = 'btn-primary stop';
+  document.getElementById('goBtn').textContent = '■ 자동매매 중지';
+  document.getElementById('nowBtn').disabled = false;
+
+  renderPortfolio(); renderHistory();
+
+  // 백엔드 연동 시도
+  try {
+    await apiCall('/init','POST',{
+      kis_app_key: document.getElementById('kisKey').value.trim(),
+      kis_app_secret: document.getElementById('kisSecret').value.trim(),
+      kis_account_no: document.getElementById('kisAccount').value.trim(),
+      kis_hts_id: document.getElementById('kisHts').value.trim(),
+      kis_virtual: S.virtual,
+      gemini_api_key: document.getElementById('geminiKey').value.trim(),
+      budget_usd: S.budget,
+      risk: S.risk,
+      rebalance_time: S.rebalTime,
+      max_stocks: S.maxStocks,
+    });
+    showToast('✅ 백엔드 서버 연결됨 — 실제 거래 모드');
+    S.pollId = setInterval(pollStatus, 30000);
+    pollStatus();
+  } catch(e) {
+    showToast('📱 시뮬레이션 모드 (백엔드 없음)', 3000);
+    // 3초 후 첫 리밸런싱 실행
+    setTimeout(()=>{ if(S.running) runSimRebalance(); }, 3000);
+  }
+}
+
+function stopBot() {
+  S.running = false;
+  clearInterval(S.pollId);
+  try { apiCall('/stop','POST'); } catch(e){}
+  document.getElementById('botPill').className = 'bot-pill stopped';
+  document.getElementById('botLbl').textContent = '중지됨';
+  document.getElementById('goBtn').className = 'btn-primary';
+  document.getElementById('goBtn').textContent = '▶ 자동매매 시작';
+  document.getElementById('nowBtn').disabled = true;
+  showToast('봇 중지됨');
+}
+
+async function triggerNow() {
+  document.getElementById('nowBtn').disabled = true;
+  try {
+    await apiCall('/rebalance/now','POST');
+    setTimeout(pollStatus, 2000);
+  } catch(e) {
+    await runSimRebalance();
+  }
+  setTimeout(()=>{ if(S.running) document.getElementById('nowBtn').disabled=false; }, 5000);
+}
+
+async function sellNow(ticker) {
+  if (!confirm(`${ticker} 전량 매도하시겠습니까?`)) return;
+  try {
+    await apiCall('/sell','POST',{ticker});
+    showToast(`💸 ${ticker} 매도 완료`);
+    setTimeout(pollStatus, 1000);
+  } catch(e) {
+    const h = SIM.holdings[ticker];
+    if (h) {
+      SIM.cash += h.qty * h.current_price;
+      delete SIM.holdings[ticker];
+      const sv = Object.values(SIM.holdings).reduce((a,v)=>a+v.qty*v.current_price,0);
+      S.portfolio = { cash:SIM.cash, total:SIM.cash+sv, pnl:SIM.cash+sv-S.budget0, holdings:{...SIM.holdings} };
+      renderPortfolio();
+      showToast(`💸 ${ticker} 매도 완료`);
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg, dur=2500) {
+  clearTimeout(toastTimer);
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  toastTimer = setTimeout(()=>t.style.display='none', dur);
+}
+
+/* ══════════════════════════════════════════════
+   PWA
+══════════════════════════════════════════════ */
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').classList.remove('hidden');
+});
+document.getElementById('installBtn')?.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') document.getElementById('installBanner').classList.add('hidden');
+  deferredPrompt = null;
+});
+
+// Service Worker 등록
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+
+/* ══════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════ */
+loadSettings();
+renderPortfolio();
+renderHistory();
+</script>
+</body>
+</html>
