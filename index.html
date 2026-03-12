@@ -158,7 +158,7 @@ body {
   background:var(--white);
   border-radius:var(--r);
   box-shadow:var(--shadow);
-  overflow:hidden;
+  overflow:clip; /* clip: 콘텐츠 자르되 스크롤 없음, border-radius 유지 */
 }
 .c-head {
   padding:14px 16px 0;
@@ -204,11 +204,11 @@ body {
 /* ── COUNTDOWN ────────────────────────── */
 .cd-body { padding:14px 16px 16px; }
 .cd-row { display:flex; align-items:center; gap:12px; }
-.cd-icon { font-size:30px; flex-shrink:0; }
-.cd-info { flex:1; }
+.cd-icon { font-size:28px; flex-shrink:0; }
+.cd-info { flex:1; min-width:0; }
 .cd-lbl { font-size:11px; font-weight:600; color:var(--gray3); margin-bottom:3px; }
-.cd-val { font-family:'DM Mono',monospace; font-size:24px; font-weight:500; color:var(--navy); }
-.cd-sub { font-size:11px; color:var(--gray3); margin-top:2px; }
+.cd-val { font-family:'DM Mono',monospace; font-size:22px; font-weight:500; color:var(--navy); }
+.cd-sub { font-size:11px; color:var(--gray3); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .prog-track { height:4px; background:var(--gray2); border-radius:2px; margin-top:10px; overflow:hidden; }
 .prog-fill  { height:100%; border-radius:2px; background:var(--blue); transition:width 1s linear; }
 
@@ -224,6 +224,8 @@ body {
 
 /* ── HOLDINGS ─────────────────────────── */
 .hold-list { padding:0 0 4px; }
+/* overflow:hidden を card から外して中身が全部見えるように */
+.card { overflow:visible !important; }
 .hold-row {
   display:flex; align-items:center; gap:12px;
   padding:13px 16px; border-bottom:1px solid var(--border);
@@ -693,20 +695,9 @@ select.f-inp { cursor:pointer; font-family:'Sora',sans-serif; font-size:13px; }
                 <input type="time" class="f-inp" id="rebalTime" value="09:35">
               </div>
             </div>
-            <div class="f-row">
-              <div class="f-grp">
-                <div class="f-lbl">최대 종목 수</div>
-                <select class="f-inp" id="maxStocks">
-                  <option value="1">1종목 집중</option>
-                  <option value="2">2종목</option>
-                  <option value="3" selected>3종목</option>
-                  <option value="5">5종목</option>
-                </select>
-              </div>
-              <div class="f-grp">
-                <div class="f-lbl">백엔드 URL</div>
-                <input type="text" class="f-inp" id="backendUrl" value="http://localhost:8000" placeholder="서버 주소">
-              </div>
+            <div class="f-grp">
+              <div class="f-lbl">백엔드 URL</div>
+              <input type="text" class="f-inp" id="backendUrl" value="http://localhost:8000" placeholder="서버 주소">
             </div>
           </div>
         </div>
@@ -903,18 +894,21 @@ function setMode(mode, el) {
 function saveSettings() {
   S.budget = parseFloat(document.getElementById('budget').value)||500;
   S.rebalTime = document.getElementById('rebalTime').value||'09:35';
-  S.maxStocks = parseInt(document.getElementById('maxStocks').value)||3;
+  S.maxStocks = 3; // AI가 자동 결정
   S.backendUrl = document.getElementById('backendUrl').value.trim()||'http://localhost:8000';
   S.virtual = virtMode;
 
   document.getElementById('botTimeDisplay').textContent = S.rebalTime + ' KST';
 
-  // localStorage 저장 (키 제외 — 보안)
+  // 설정값 저장 (API 키 제외 — 보안상 localStorage에 키 비저장)
   try {
     localStorage.setItem('stockai_settings', JSON.stringify({
       budget: S.budget, rebalTime: S.rebalTime,
-      maxStocks: S.maxStocks, backendUrl: S.backendUrl, virtual: S.virtual
+      backendUrl: S.backendUrl, virtual: S.virtual
     }));
+    // Gemini 키는 sessionStorage에만 (탭 닫으면 삭제, 새로고침엔 유지)
+    const gKey = document.getElementById('geminiKey').value.trim();
+    if (gKey) sessionStorage.setItem('stockai_gemini_key', gKey);
   } catch(e){}
 
   const fb = document.getElementById('saveFeedback');
@@ -928,9 +922,14 @@ function loadSettings() {
     const saved = JSON.parse(localStorage.getItem('stockai_settings')||'{}');
     if (saved.budget)    { document.getElementById('budget').value = saved.budget; S.budget = saved.budget; S.budget0 = saved.budget; }
     if (saved.rebalTime) { document.getElementById('rebalTime').value = saved.rebalTime; S.rebalTime = saved.rebalTime; }
-    if (saved.maxStocks) { document.getElementById('maxStocks').value = saved.maxStocks; S.maxStocks = saved.maxStocks; }
     if (saved.backendUrl){ document.getElementById('backendUrl').value = saved.backendUrl; S.backendUrl = saved.backendUrl; }
     if (saved.virtual !== undefined) { virtMode = saved.virtual; setMode(virtMode?'virtual':'real', null); }
+
+    // Gemini 키 복원 (sessionStorage — 새로고침엔 유지, 탭 닫으면 삭제)
+    const gKey = sessionStorage.getItem('stockai_gemini_key');
+    if (gKey) document.getElementById('geminiKey').value = gKey;
+
+    document.getElementById('botTimeDisplay').textContent = S.rebalTime + ' KST';
   } catch(e){}
 }
 
@@ -1085,7 +1084,10 @@ async function runSimRebalance() {
   document.getElementById('reasonBox').innerHTML =
     '<span class="r-tag">분석중</span><div class="dots"><span></span><span></span><span></span></div>';
 
-  const key = document.getElementById('geminiKey').value.trim();
+  // geminiKey: input 값 우선, 없으면 sessionStorage에서 가져오기
+  const key = document.getElementById('geminiKey').value.trim()
+    || sessionStorage.getItem('stockai_gemini_key')
+    || '';
   let advice = null;
 
   if (key) {
@@ -1093,12 +1095,10 @@ async function runSimRebalance() {
       const prompt = `당신은 미국 주식 포트폴리오 매니저입니다. 오늘의 포트폴리오를 JSON만 반환하세요 (마크다운 없이).
 
 예산: $${SIM.cash.toFixed(2)}
-리스크: ${S.risk}
-최대 종목 수: ${S.maxStocks}
 현재 보유: ${JSON.stringify(Object.keys(SIM.holdings))}
 
-S&P500 전체 (ETF 포함)에서 자유롭게 선택하세요.
-각 종목의 weight 합이 1.0이 되도록 하세요.
+S&P500 전체 (ETF 포함)에서 자유롭게 2~5종목 선택하세요.
+각 종목의 weight 합이 정확히 1.0이 되도록 하세요.
 
 {"picks":[{"ticker":"NVDA","weight":0.4,"reason":"이유"},{"ticker":"SPY","weight":0.6,"reason":"이유"}],"sell":[],"summary":"전략 요약 2문장"}`;
 
@@ -1119,11 +1119,12 @@ S&P500 전체 (ETF 포함)에서 자유롭게 선택하세요.
 
   // Fallback
   if (!advice) {
-    const picks = [...SAMPLE].sort(()=>Math.random()-.5).slice(0,S.maxStocks);
+    const n = 3; // AI가 직접 결정하지만 fallback은 3종목
+    const picks = [...SAMPLE].sort(()=>Math.random()-.5).slice(0, n);
     advice = {
-      picks: picks.map((p,i)=>({ ticker:p.t, weight:1/picks.length, reason:p.r })),
+      picks: picks.map(p=>({ ticker:p.t, weight:1/picks.length, reason:p.r })),
       sell: Object.keys(SIM.holdings),
-      summary: 'AI 키 없음 — 규칙 기반 분산 포트폴리오 적용',
+      summary: key ? 'Gemini 응답 파싱 오류 — 규칙 기반으로 대체' : '규칙 기반 분산 포트폴리오 적용',
     };
     document.getElementById('aiEngineLbl').textContent = '규칙 기반';
   }
@@ -1136,9 +1137,9 @@ S&P500 전체 (ETF 포함)에서 자유롭게 선택하세요.
   }
   SIM.holdings = {};
 
-  // 매수
+  // 매수 (AI picks 전부 사용)
   const buys = [];
-  for (const pick of (advice.picks||[]).slice(0,S.maxStocks)) {
+  for (const pick of (advice.picks||[])) {
     const invest = SIM.cash * pick.weight;
     const base = SAMPLE.find(s=>s.t===pick.ticker)?.p || 150;
     const price = base * (0.985 + Math.random()*.03);
@@ -1179,6 +1180,7 @@ S&P500 전체 (ETF 포함)에서 자유롭게 선택하세요.
 
   renderPortfolio();
   renderHistory();
+  persistState(); // ← 저장
   showToast(`✅ 리밸런싱 완료 — ${buys.length}종목 편입`);
 }
 
@@ -1265,9 +1267,59 @@ async function sellNow(ticker) {
       const sv = Object.values(SIM.holdings).reduce((a,v)=>a+v.qty*v.current_price,0);
       S.portfolio = { cash:SIM.cash, total:SIM.cash+sv, pnl:SIM.cash+sv-S.budget0, holdings:{...SIM.holdings} };
       renderPortfolio();
+      persistState();
       showToast(`💸 ${ticker} 매도 완료`);
     }
   }
+}
+
+/* ══════════════════════════════════════════════
+   PERSIST (새로고침 후에도 데이터 유지)
+══════════════════════════════════════════════ */
+function persistState() {
+  try {
+    localStorage.setItem('stockai_state', JSON.stringify({
+      running: S.running,
+      budget0: S.budget0,
+      portfolio: S.portfolio,
+      rbHistory: S.rbHistory,
+      rbCount: S.rbCount,
+      sim: SIM,
+    }));
+  } catch(e) {}
+}
+
+function restoreState() {
+  try {
+    const raw = localStorage.getItem('stockai_state');
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved.portfolio)  S.portfolio  = saved.portfolio;
+    if (saved.rbHistory)  S.rbHistory  = saved.rbHistory;
+    if (saved.rbCount)    S.rbCount    = saved.rbCount;
+    if (saved.budget0)  { S.budget0    = saved.budget0; S.budget = saved.budget0; }
+    if (saved.sim)        SIM          = saved.sim;
+
+    // 이전에 실행 중이었다면 UI만 복원 (자동 재시작은 하지 않음)
+    if (saved.running) {
+      document.getElementById('botPill').className = 'bot-pill stopped';
+      document.getElementById('botLbl').textContent = '중지됨 (복원)';
+    }
+
+    // AI 요약 복원
+    if (S.rbHistory.length) {
+      const last = S.rbHistory[S.rbHistory.length-1];
+      document.getElementById('reasonBox').innerHTML =
+        `<span class="r-tag">복원됨</span>${last.ai_summary||''}`;
+      const key = sessionStorage.getItem('stockai_gemini_key')||'';
+      const conf = Math.min(95, 65 + (last.buys||[]).length*5 + (key?20:0));
+      document.getElementById('confTxt').textContent = conf+'%';
+      document.getElementById('confBar').style.width = conf+'%';
+      const d = (last.buys||[]).length ? 'BUY' : 'HOLD';
+      document.getElementById('decBadge').textContent = d==='BUY'?'▲ BUY':'◆ HOLD';
+      document.getElementById('decBadge').className = 'dec-badge '+d;
+    }
+  } catch(e) {}
 }
 
 /* ══════════════════════════════════════════════
@@ -1310,6 +1362,7 @@ if ('serviceWorker' in navigator) {
    INIT
 ══════════════════════════════════════════════ */
 loadSettings();
+restoreState();   // ← 새로고침 후 이력·포트폴리오 복원
 renderPortfolio();
 renderHistory();
 </script>
